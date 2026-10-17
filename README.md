@@ -103,7 +103,7 @@ need more detail, call `parallel_fetch` with a result URL and reuse the returned
 
 ```json
 {
-  "urls": ["https://gofastmcp.com/quickstart"],
+  "urls": ["https://gofastmcp.com/getting-started/quickstart"],
   "objective": "Find the local server startup command",
   "session_id": "<session_id from the search response>"
 }
