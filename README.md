@@ -1,7 +1,8 @@
 # horizon_my_mcp
 
 A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that exposes
-[Tavily](https://tavily.com) and [Firecrawl](https://www.firecrawl.dev) web search
+[Tavily](https://tavily.com), [Firecrawl](https://www.firecrawl.dev), and
+[Parallel](https://docs.parallel.ai/integrations/mcp/search-mcp) web search
 and extraction, deployable to both [Prefect Horizon](https://horizon.prefect.io)
 and [FastMCP Cloud](https://fastmcp.cloud).
 
@@ -13,9 +14,10 @@ following the conventions in `coding-flow` skill's `references/user-defaults.md`
 
 | Path | Purpose |
 | --- | --- |
-| `src/horizon_my_mcp/server.py` | FastMCP 3.x server (`web_search`, `web_extract`, `web_agent`, `tavily_search`). Single source of truth for tool registration. |
+| `src/horizon_my_mcp/server.py` | FastMCP 3.x server (`web_search`, `web_extract`, `web_agent`, `tavily_search`, `parallel_search`, `parallel_fetch`). Single source of truth for tool registration. |
 | `src/horizon_my_mcp/firecrawl_client.py` | Thin wrapper around `firecrawl-py` (search / scrape / agent), keyless-aware. |
 | `src/horizon_my_mcp/tavily_client.py` | Thin wrapper around the official `tavily-python` SDK. |
+| `src/horizon_my_mcp/parallel_client.py` | Async client for anonymous Parallel Search MCP search and page fetching. |
 | `src/horizon_my_mcp/cli.py` | `python -m horizon_my_mcp` entry point. |
 | `fastmcp.json` | FastMCP Cloud project config (points at `src/server.py` + `create_server` factory). |
 | `prefect_flows/flows.py` | Prefect flow that smoke-tests the MCP server. |
@@ -78,6 +80,44 @@ month, no API key required. The Firecrawl-backed tools (`web_search`,
 tier when `FIRECRAWL_API_KEY` is not set. To authenticate against a paid
 tier instead, set `FIRECRAWL_API_KEY` in the deployment environment.
 
+### Parallel search and page fetching
+
+Call `parallel_search` or `parallel_fetch` for free web search and page excerpts
+through [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp),
+with no account or API key. Anonymous search uses Fast mode. These are separate
+tools: `web_search`, `web_extract`, `web_agent`, and `tavily_search` keep their
+existing providers and arguments.
+
+After the local quickstart, select `parallel_search` in your MCP client and pass:
+
+```json
+{
+  "objective": "Find the current FastMCP documentation for running a local server",
+  "search_queries": ["FastMCP local server stdio documentation"]
+}
+```
+
+Results are JSON-encoded strings containing source URLs and excerpts. When you
+need more detail, call `parallel_fetch` with a result URL and reuse the returned
+`session_id` across related calls:
+
+```json
+{
+  "urls": ["https://gofastmcp.com/quickstart"],
+  "objective": "Find the local server startup command",
+  "session_id": "<session_id from the search response>"
+}
+```
+
+`parallel_fetch` returns excerpts by default. Set `full_content` to `true` only
+when full page markdown is needed; it can exceed a client's tool-output limit.
+The anonymous endpoint is rate-limited and intended for exploration and light
+use. Remote tool failures are reported as MCP errors, without switching to
+another provider. Requests use Streamable HTTP at `https://search.parallel.ai/mcp`
+and have a 60-second overall timeout. Neither tool reads or forwards API keys.
+Only calls to the Parallel tools contact that endpoint; server startup and tool
+listing work offline.
+
 ### Tool signatures
 
 ```text
@@ -104,6 +144,19 @@ tavily_search(
     topic: str = "general",                  # "general" or "news"
     include_answer: bool = True,
 ) -> str                                      # JSON-encoded Tavily response
+
+parallel_search(
+    objective: str,
+    search_queries: list[str],               # related queries, 3-6 words each
+    session_id: str | None = None,
+) -> str                                      # JSON-encoded Parallel search response
+
+parallel_fetch(
+    urls: list[str],                        # 1..20 HTTP(S) URLs
+    objective: str | None = None,            # up to 200 characters
+    full_content: bool = False,
+    session_id: str | None = None,
+) -> str                                      # JSON-encoded Parallel fetch response
 ```
 
 ## Continuous deployment to Prefect Horizon

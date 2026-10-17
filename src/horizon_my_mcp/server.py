@@ -21,6 +21,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from horizon_my_mcp import firecrawl_client as firecrawl
+from horizon_my_mcp import parallel_client as parallel
 from horizon_my_mcp import tavily_client as tavily
 
 mcp = FastMCP("horizon-my-mcp")
@@ -105,6 +106,42 @@ def tavily_search(
         topic=topic,
         include_answer=include_answer,
     )
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+async def parallel_search(
+    objective: str,
+    search_queries: list[str],
+    session_id: str | None = None,
+) -> str:
+    """Search the web with Parallel's anonymous Fast mode, without an API key.
+
+    Args:
+        objective: One focused research goal, including freshness needs.
+        search_queries: Related keyword queries of 3-6 words each.
+        session_id: Reuse the returned session_id across related searches/fetches.
+    """
+    result = await parallel.search(objective, search_queries, session_id)
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+async def parallel_fetch(
+    urls: list[str],
+    objective: str | None = None,
+    full_content: bool = False,
+    session_id: str | None = None,
+) -> str:
+    """Fetch relevant page excerpts with Parallel, without an API key.
+
+    Args:
+        urls: 1-20 HTTP or HTTPS URLs to read.
+        objective: Optional extraction goal, up to 200 characters.
+        full_content: Include full markdown; may produce very large responses.
+        session_id: Reuse the session_id from the related search/fetch response.
+    """
+    result = await parallel.fetch(urls, objective, full_content, session_id)
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
